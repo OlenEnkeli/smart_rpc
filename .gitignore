@@ -9,3 +9,7 @@ __pycach__
 
 # MacOS
 .DS_Store
+
+# IDE
+.idea
+.vscode

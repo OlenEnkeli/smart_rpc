@@ -5,7 +5,7 @@ tasks:
     cmds:
      - poetry run ruff check . --fix --show-fixes
      - poetry run mypy .
-     - poetry isort .
+     - poetry run isort .
 
   test:
     cmds:
