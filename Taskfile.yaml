@@ -1,0 +1,12 @@
+version: '3'
+
+tasks:
+  lint:
+    cmds:
+     - poetry run ruff check . --fix --show-fixes
+     - poetry run mypy .
+     - poetry isort .
+
+  test:
+    cmds:
+      - poetry run pytest tests/
