@@ -177,3 +177,81 @@ class MaxMessageSizeReceivedError(ExternalError):
                 'max_message_size': max_message_size,
             },
         )
+
+
+class AnnotationError(FatalError):
+    ...
+
+
+class AnnotationValidationError(AnnotationError):
+    def __init__(
+        self,
+        details: dict[str, Any],
+    ) -> None:
+        super().__init__(
+            error_code='AnnotationValidation',
+            details=details,
+        )
+
+
+class AnnotationUnknownFieldTypeError(AnnotationError):
+    def __init__(
+        self,
+        field_type: str,
+    ) -> None:
+        super().__init__(
+            error_code = 'AnnotationUnknownFieldType',
+            details = {
+                'unknown_field_type': field_type,
+            },
+        )
+
+
+class AnnotationCaseError(AnnotationValidationError):
+    def __init__(
+        self,
+        field: str,
+        *,
+        upper: bool = True,
+    ) -> None:
+        super().__init__(
+            details={
+                field: f'must be in {'camelCase or UpperCase' if upper else 'lower_case'}',
+            },
+        )
+
+
+class AnnotationEnumNotFoundError(AnnotationValidationError):
+    def __init__(
+        self,
+        field: str,
+    ) -> None:
+        super().__init__(
+            details={
+                'not_found': f'{field} enum',
+            },
+        )
+
+
+class AnnotationObjectNotFoundError(AnnotationValidationError):
+    def __init__(
+        self,
+        field: str,
+    ) -> None:
+        super().__init__(
+            details={
+                'not_found': f'{field} object',
+            },
+        )
+
+
+class AnnotationNoMethodError(AnnotationError):
+    def __init__(
+        self,
+    ) -> None:
+        super().__init__(
+            error_code='AnnotationNoMethod',
+            details={
+                'no_method': 'at least one must be declared in annotation file',
+            },
+        )

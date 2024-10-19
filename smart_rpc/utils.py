@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import UTC, datetime
 from functools import wraps
 from typing import Any
@@ -9,6 +10,10 @@ from rich.logging import RichHandler
 from smart_rpc.types import SyncFunction
 
 AVERAGE_TEST_COUNT = 10
+
+
+def check_camel_case(validated: str) -> bool:
+    return bool(re.match('^([A-Z][a-z]+)+$', validated))
 
 
 def time_it(

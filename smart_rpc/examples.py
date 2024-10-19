@@ -49,3 +49,39 @@ example_response_values = {
     'some_param': 'test',
     **example_request_values,
 }
+
+example_rpc_annotation = {
+  'enums': {
+    'TypeEnum': {
+      'SIMPLE': 'simple',
+      'EXTENDED': 'extended',
+    },
+  },
+
+  'objects': {
+    'Child': {
+      'id': ['int', 'string'],
+      'uuid': 'uuid',
+    },
+  },
+
+  'methods': {
+    'sample_method': {
+      'request': {
+        'name': 'string',
+        'type': 'TypeEnum',
+        'children': ['Child'],
+        'main_day': ['date', 'null'],
+        'selected_days': [['date', 'datetime'], 'null'],
+        'updated_at': ['datetime', 'null'],
+        'is_active': 'boolean',
+      },
+
+      'response': {
+        'id': ['int', 'string'],
+        'uuid': 'uuid',
+        'created_at': 'datetime',
+      },
+    },
+  },
+}

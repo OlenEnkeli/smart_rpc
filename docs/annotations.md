@@ -6,12 +6,13 @@
 
 ## Types
 
-### General Types
+### Primitive Types
 
  - `integer`
  - `float`
  - `boolean`
  - `string`
+ - `uuid`
  - `date`
  - `datetime`
 
