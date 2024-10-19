@@ -69,13 +69,26 @@ class MessageHandler:
         user: UserIface,
     ) -> Response:
         try:
-            request = Request.load(message)
+            method_name = Request.find_method_name(message)
         except ValidationError as error:
             return response_from_error(error)
 
-        method = self.methods.get(request.method_name)
-        if not method or request.method_name not in self.methods:
-            return response_from_error(UnknownMethodError(request.method_name))
+        method = self.methods.get(method_name)
+        if not method or method_name not in self.methods:
+            return response_from_error(UnknownMethodError(method_name))
+
+        request_class = self.methods[method_name].__annotations__.get('request')
+        if not request_class:
+            return response_from_error(
+                MethodInternalError(
+                    details={'request_argument': 'must be set in message handler method'}
+                )
+            )
+
+        try:
+            request = request_class.load(message)
+        except ValidationError as error:
+            return response_from_error(error)
 
         try:
             return await method(request, user)

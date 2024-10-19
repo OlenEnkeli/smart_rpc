@@ -1,10 +1,19 @@
-from socket import socket
+import asyncio
 
 from smart_rpc.ifaces import UserIface
 
 
 class User(UserIface):
-    client_socket: socket
+    address: str
+    reader: asyncio.StreamReader
+    writer: asyncio.StreamWriter
 
-    def __init__(self, client_socket: socket) -> None: # typing:ignore[valid-type]
-        self.client_socket = client_socket
+    def __init__(
+        self,
+        address: str,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        self.address = address
+        self.reader = reader
+        self.writer = writer

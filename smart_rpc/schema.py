@@ -18,9 +18,9 @@ class BaseSchema(BaseModel):
         ]
 
 
-class PayloadSchema(BaseSchema):
+class BasePayloadSchema(BaseSchema):
     ...
 
 
-class HeadersSchema(BaseSchema):
-    trace_id: str
+class BaseHeadersSchema(BaseSchema):
+    trace_id: str | None = None

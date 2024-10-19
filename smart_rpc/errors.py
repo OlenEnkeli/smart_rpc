@@ -59,9 +59,43 @@ class FatalError(BaseError):
         )
 
 
+class ServerFatalError(FatalError):
+    def __init__(
+        self,
+        details: dict[str, Any],
+    ) -> None:
+        super().__init__(
+            error_code='ServerFatalError',
+            details=details,
+        )
+
+
+class ClientFatalError(FatalError):
+    def __init__(
+        self,
+        details: dict[str, Any],
+    ) -> None:
+        super().__init__(
+            error_code='ClientServerError',
+            details=details,
+        )
+
+
+class RequestTimeoutError(BaseError):
+    def __init__(
+        self,
+        timeout: int,
+    ) -> None:
+        super().__init__(
+            error_code='RequestTimeout',
+            details={
+                'timeout': timeout,
+            }
+        )
+
+
 class ExternalError(BaseError):
     ...
-
 
 
 def handle_error(
@@ -120,4 +154,17 @@ class MethodInternalError(ExternalError):
         super().__init__(
             error_code='MethodInternal',
             details=details,
+        )
+
+
+class MaxMessageSizeReceivedError(ExternalError):
+    def __init__(
+        self,
+        max_message_size: int,
+    ) -> None:
+        super().__init__(
+            error_code='MaxMessageSizeReceived',
+            details={
+                'max_message_size': max_message_size,
+            }
         )

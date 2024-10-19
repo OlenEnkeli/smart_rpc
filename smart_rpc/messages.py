@@ -11,27 +11,25 @@ from pydantic import ValidationError as PydanticValidationError
 
 from smart_rpc.constants import ZERO_TRACE_ID
 from smart_rpc.errors import ExternalError, ValidationError
-from smart_rpc.schema import HeadersSchema, PayloadSchema
+from smart_rpc.schema import BaseHeadersSchema, BasePayloadSchema
 from smart_rpc.utils import compute_average_time
 
 
 class Request:
     method_name: str
     trace_id: str
-    payload: PayloadSchema
-    headers: HeadersSchema
+    payload: BasePayloadSchema
+    headers: BaseHeadersSchema
+
+    class PayloadSchema(BasePayloadSchema):
+        ...
+
+    class HeadersSchema(BaseHeadersSchema):
+        ...
 
     @property
-    def payload_schema(self) -> Type[PayloadSchema]:
-        raise ValidationError(
-            details={
-                'payload_schema': 'must be set',
-            },
-        )
-
-    @property
-    def headers_schema(self) -> Type[HeadersSchema]:
-        return HeadersSchema
+    def headers_schema(self) -> Type[BaseHeadersSchema]:
+        return BaseHeadersSchema
 
     def __init__(
         self,
@@ -49,8 +47,8 @@ class Request:
         headers['trace_id'] = self.trace_id
 
         try:
-            self.payload = self.payload_schema.model_validate(payload)
-            self.headers = self.headers_schema.model_validate(headers)
+            self.payload = self.PayloadSchema.model_validate(payload)
+            self.headers = self.HeadersSchema.model_validate(headers)
         except PydanticValidationError as error:
             raise ValidationError.from_base_exception(error) from error
 
@@ -90,14 +88,30 @@ class Request:
         )
 
     def dump(self) -> bytes:
-        payload = orjson.dumps(self.payload_schema.model_dump(self.payload))
-        headers = orjson.dumps(self.headers_schema.model_dump(self.headers))
+        payload = orjson.dumps(self.PayloadSchema.model_dump(self.payload))
+        headers = orjson.dumps(self.HeadersSchema.model_dump(self.headers))
 
         return b''.join([
             self.method_name.encode('utf-8'),
             payload,
             headers,
         ])
+
+    @classmethod
+    def find_method_name(cls, data: bytes | str) -> str:
+        message = data if isinstance(data, str) else data.decode('utf-8')
+
+        payload_start_at = message.find('{')
+        if (
+            payload_start_at in (-1, 0)
+        ):
+            raise ValidationError(
+                details={
+                    'invalid_message_format': 'please check smart_rpc request/response format documentation',
+                },
+            )
+
+        return message[0:payload_start_at]
 
     def __str__(self) -> str:
         return f'Request <{self.method_name}: {self.trace_id}>'
@@ -106,21 +120,15 @@ class Request:
 class Response:
     method_name: str
     trace_id: str
-    payload: PayloadSchema
-    headers: HeadersSchema
+    payload: BasePayloadSchema
+    headers: BaseHeadersSchema
     success: bool
 
-    @property
-    def payload_schema(self) -> Type[PayloadSchema]:
-        raise ValidationError(
-            details={
-                'payload_schema': 'must be set',
-            },
-        )
+    class PayloadSchema(BasePayloadSchema):
+        ...
 
-    @property
-    def headers_schema(self) -> Type[HeadersSchema]:
-        return HeadersSchema
+    class HeadersSchema(BaseHeadersSchema):
+        ...
 
     def __init__(
         self,
@@ -139,8 +147,8 @@ class Response:
         headers = headers or {}
 
         try:
-            self.payload = self.payload_schema.model_validate(payload)
-            self.headers = self.headers_schema.model_validate(headers)
+            self.payload = self.PayloadSchema.model_validate(payload)
+            self.headers = self.HeadersSchema.model_validate(headers)
         except PydanticValidationError as error:
             raise ValidationError.from_base_exception(error) from error
 
@@ -186,8 +194,8 @@ class Response:
         )
 
     def dump(self) -> bytes:
-        payload = orjson.dumps(self.payload_schema.model_dump(self.payload))
-        headers = orjson.dumps(self.headers_schema.model_dump(self.headers))
+        payload = orjson.dumps(self.PayloadSchema.model_dump(self.payload))
+        headers = orjson.dumps(self.HeadersSchema.model_dump(self.headers))
         success = b'ok' if self.success else b'err'
 
         return b''.join([
@@ -228,38 +236,24 @@ def response_from_error(
 if __name__ == '__main__':
     from rich import print
 
-    class ExamplePayload(PayloadSchema):
-        first_param: str
+    from smart_rpc.examples import ExampleRequest, ExampleResponse
 
-    class ExampleHeaders(HeadersSchema):
-        another_param: str
-
-    class ExampleRequest(Request):
-        @property
-        def payload_schema(self) -> Type[PayloadSchema]:
-            return ExamplePayload
-
-    class ExampleResponse(Response):
-        @property
-        def payload_schema(self) -> Type[PayloadSchema]:
-            return ExamplePayload
-
-    EXAMPLE_MESSAGE = (
+    EXAMPLE_REQUEST = (
         b'function_name'
-        b'{"first_param": "param_value"}'
+        b'{"send_this": "back"}'
         b'{"trace_id": "d948790a-5e67-471f-8bd0-ec212c4b8acc", "another_param": "param_value"}'
     )
 
     EXAMPLE_RESPONSE = (
         b'function_name:ok'
-        b'{"first_param": "example"}'
+        b'{"some_param": "example", "send_this": "back"}'
         b'{"trace_id": "d948790a-5e67-471f-8bd0-ec212c4b8acc", "another_param": "param_value"}'
     )
 
     @compute_average_time
     def compute_load_time() -> tuple[Request, Response]:
         return (
-            ExampleRequest.load(EXAMPLE_MESSAGE),
+            ExampleRequest.load(EXAMPLE_REQUEST),
             ExampleResponse.load(EXAMPLE_RESPONSE),
         )
 
