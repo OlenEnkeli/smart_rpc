@@ -1,9 +1,5 @@
-from typing import (
-    Any,
-    Callable,
-    Coroutine,
-    TypeAlias,
-)
+from collections.abc import Callable, Coroutine
+from typing import Any
 
-SyncFunction: TypeAlias = Callable[..., Any]
-AsyncFunction: TypeAlias = Callable[..., Coroutine[Any, Any, Any]]
+type SyncFunction = Callable[..., Any]
+type AsyncFunction = Callable[..., Coroutine[Any, Any, Any]]

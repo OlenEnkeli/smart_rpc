@@ -28,6 +28,7 @@ force_grid_wrap = 3
 
 [tool.ruff]
 src = ["src", "tests"]
+target-version = "py312"
 lint.select = ["ALL"]
 lint.ignore = [
     "E501",    # line too long, handled by black
@@ -52,6 +53,7 @@ lint.ignore = [
     "FA100",   # Add `from __future__ import annotations` to simplify `typing.Type`
     "G004",    # Logging statement uses f-string
     "D300",    # Convert to triple double quotes
+    "D106",    # Missing docstring in public nested class
 ]
 format.quote-style = "single"
 

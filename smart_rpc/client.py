@@ -17,7 +17,7 @@ class BaseClient:
     max_message_size: int
     timeout_ms: int
 
-    is_blocking: bool
+    locking_event: asyncio.Event
 
     writer: asyncio.StreamWriter
     reader: asyncio.StreamReader
@@ -35,7 +35,7 @@ class BaseClient:
         self.max_message_size = max_message_size
         self.timeout_ms = timeout_ms
 
-        self.is_blocking = False
+        self.locking_event = asyncio.Event()
         self.logger = getLogger(self.__class__.__name__)
 
     async def connect(self) -> None:
@@ -48,17 +48,16 @@ class BaseClient:
             raise ClientFatalError.from_base_exception(error) from error
 
     async def send(self, request: Request) -> Response:
-        while self.is_blocking is True:
-            await asyncio.sleep(0.01)
-
         request.trace_id = str(uuid4())
 
-        self.is_blocking = True
+        await self.locking_event.wait()
+        self.locking_event.set()
+
         self.writer.write(request.dump() + MESSAGE_SEPARATOR)
         await self.writer.drain()
-
         data = await self.reader.readuntil(MESSAGE_SEPARATOR)
-        self.is_blocking = False
+
+        self.locking_event.clear()
 
         return Response.load(data[:-1])
 
@@ -66,16 +65,24 @@ class BaseClient:
 if __name__ == '__main__':
     from rich import print
 
-    from smart_rpc.examples import ExampleResponse, ExampleRequest
+    from smart_rpc.examples import (
+        ExampleRequest,
+        ExampleResponse,
+        example_request_values,
+    )
+
 
     class Client(BaseClient):
         async def first_method(self, send_this: str) -> ExampleResponse:
             request = ExampleRequest(
                 method_name='first_method',
-                payload={'send_this': send_this},
+                payload={
+                    **example_request_values,
+                    'send_this': send_this,
+                },
             )
 
-            return await self.send(request)
+            return await self.send(request)  # type:ignore[return-value]
 
     client = Client(
         host='127.0.0.1',
@@ -86,7 +93,7 @@ if __name__ == '__main__':
         await client.connect()
 
         response = await client.first_method(
-            send_this=f'back for 1 time',
+            send_this='back',
         )
         print(response)
 

@@ -1,16 +1,17 @@
 import logging
-from typing import (
-    Any,
-    Self,
-    Type,
-)
+import re
+from typing import Any, Self
 from uuid import uuid4
 
 import orjson
 from pydantic import ValidationError as PydanticValidationError
 
 from smart_rpc.constants import ZERO_TRACE_ID
-from smart_rpc.errors import ExternalError, ValidationError
+from smart_rpc.errors import (
+    ExternalError,
+    InvalidMessageFormatError,
+    ValidationError,
+)
 from smart_rpc.schema import BaseHeadersSchema, BasePayloadSchema
 from smart_rpc.utils import compute_average_time
 
@@ -28,7 +29,7 @@ class Request:
         ...
 
     @property
-    def headers_schema(self) -> Type[BaseHeadersSchema]:
+    def headers_schema(self) -> type[BaseHeadersSchema]:
         return BaseHeadersSchema
 
     def __init__(
@@ -56,19 +57,18 @@ class Request:
     def load(cls, data: bytes | str) -> Self:
         message = data if isinstance(data, str) else data.decode('utf-8')
 
-        payload_start_at = message.find('{')
-        headers_start_at = message.find('{', payload_start_at + 1)
+        all_opening_curly_brace = [
+            element.start()
+            for element in re.finditer('(?={)', message)
+        ]
+        if len(all_opening_curly_brace) < 2:  # noqa:PLR2004
+            raise InvalidMessageFormatError
 
-        if (
-            payload_start_at in (-1, 0)
-            or headers_start_at in (-1, 0)
-            or payload_start_at >= headers_start_at
-        ):
-            raise ValidationError(
-                details={
-                    'invalid_message_format': 'please check smart_rpc request/response format documentation',
-                },
-            )
+        payload_start_at = all_opening_curly_brace[0]
+        headers_start_at = all_opening_curly_brace[-1]
+
+        if payload_start_at >= headers_start_at:
+            raise InvalidMessageFormatError
 
         method_name = message[0:payload_start_at]
 
@@ -105,11 +105,7 @@ class Request:
         if (
             payload_start_at in (-1, 0)
         ):
-            raise ValidationError(
-                details={
-                    'invalid_message_format': 'please check smart_rpc request/response format documentation',
-                },
-            )
+            raise InvalidMessageFormatError
 
         return message[0:payload_start_at]
 
@@ -145,6 +141,7 @@ class Response:
 
         payload = payload or {}
         headers = headers or {}
+        headers['trace_id'] = self.trace_id
 
         try:
             self.payload = self.PayloadSchema.model_validate(payload)
@@ -157,21 +154,28 @@ class Response:
         message = data if isinstance(data, str) else data.decode('utf-8')
 
         success_start_at = message.find(':')
-        payload_start_at = message.find('{', success_start_at + 1)
-        headers_start_at = message.find('{', payload_start_at + 1)
+        if success_start_at < 2:  # noqa:PLR2004
+            raise InvalidMessageFormatError
+
+        all_opening_curly_brace = [
+            element.start()
+            for element in re.finditer('(?={)', message)
+        ]
+        if len(all_opening_curly_brace) < 2:  # noqa:PLR2004
+            raise InvalidMessageFormatError
+
+        payload_start_at = all_opening_curly_brace[0]
+        headers_start_at = all_opening_curly_brace[-1]
+
+        if payload_start_at >= headers_start_at:
+            raise InvalidMessageFormatError
 
         if (
-            payload_start_at in (-1, 0)
-            or success_start_at in (-1, 0)
-            or headers_start_at in (-1, 0)
-            or success_start_at >= headers_start_at
+            success_start_at >= headers_start_at
             or payload_start_at >= headers_start_at
         ):
-            raise ValidationError(
-                details={
-                    'invalid_message_format': 'please check smart_rpc request/response format documentation',
-                },
-            )
+            raise InvalidMessageFormatError
+
 
         method_name = message[0:success_start_at]
         success = (message[success_start_at+1:payload_start_at] == 'ok')
@@ -179,11 +183,7 @@ class Response:
         headers = orjson.loads(message[headers_start_at:])
 
         if not (trace_id := headers.get('trace_id')):
-            raise ValidationError(
-                details={
-                    'trace_id': 'must be set',
-                },
-            )
+            raise InvalidMessageFormatError
 
         return cls(
             method_name=method_name,
@@ -236,38 +236,46 @@ def response_from_error(
 if __name__ == '__main__':
     from rich import print
 
-    from smart_rpc.examples import ExampleRequest, ExampleResponse
-
-    EXAMPLE_REQUEST = (
-        b'function_name'
-        b'{"send_this": "back"}'
-        b'{"trace_id": "d948790a-5e67-471f-8bd0-ec212c4b8acc", "another_param": "param_value"}'
-    )
-
-    EXAMPLE_RESPONSE = (
-        b'function_name:ok'
-        b'{"some_param": "example", "send_this": "back"}'
-        b'{"trace_id": "d948790a-5e67-471f-8bd0-ec212c4b8acc", "another_param": "param_value"}'
+    from smart_rpc.examples import (
+        ExampleRequest,
+        ExampleResponse,
+        example_request_values,
+        example_response_values,
     )
 
     @compute_average_time
-    def compute_load_time() -> tuple[Request, Response]:
+    def make_request_response() -> tuple[Request, Response]:
         return (
-            ExampleRequest.load(EXAMPLE_REQUEST),
-            ExampleResponse.load(EXAMPLE_RESPONSE),
+            ExampleRequest(
+                method_name='first_method',
+                trace_id=str(uuid4()),
+                payload=example_request_values,
+            ),
+            ExampleResponse(
+                method_name='first_method',
+                trace_id=str(uuid4()),
+                success=True,
+                payload=example_response_values,
+            ),
         )
 
-    req, resp = compute_load_time()
-    print(req)
-    print(resp, '\n')
+    req, resp = make_request_response()
 
     @compute_average_time
-    def compute_dump_time(request: ExampleRequest, response: ExampleResponse) -> tuple[bytes, bytes]:
+    def dump_request_response(request: ExampleRequest, response: ExampleResponse) -> tuple[bytes, bytes]:
         return (
             request.dump(),
             response.dump(),
         )
 
-    dumped_req, dumped_resp = compute_dump_time(req, resp)
+    dumped_req, dumped_resp = dump_request_response(req, resp)
 
-    print(dumped_req, dumped_resp, sep='\n')
+    @compute_average_time
+    def load_request_response(raw_request: bytes, raw_response: bytes) -> tuple[Request, Response]:
+        return (
+            ExampleRequest.load(raw_request),
+            ExampleResponse.load(raw_response),
+        )
+
+    req, resp = load_request_response(dumped_req, dumped_resp)
+    print(req, resp, sep='\n')

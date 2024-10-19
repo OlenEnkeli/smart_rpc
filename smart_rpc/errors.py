@@ -90,7 +90,7 @@ class RequestTimeoutError(BaseError):
             error_code='RequestTimeout',
             details={
                 'timeout': timeout,
-            }
+            },
         )
 
 
@@ -135,6 +135,15 @@ class ValidationError(ExternalError):
         )
 
 
+class InvalidMessageFormatError(ValidationError):
+    def __init__(self) -> None:
+        super().__init__(
+            details={
+                'invalid_message_format': 'please check smart_rpc request/response format documentation',
+            },
+        )
+
+
 class UnknownMethodError(ExternalError):
     def __init__(
         self,
@@ -166,5 +175,5 @@ class MaxMessageSizeReceivedError(ExternalError):
             error_code='MaxMessageSizeReceived',
             details={
                 'max_message_size': max_message_size,
-            }
+            },
         )

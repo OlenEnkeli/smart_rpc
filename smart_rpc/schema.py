@@ -1,8 +1,5 @@
-from typing import (
-    Any,
-    Iterable,
-    Self,
-)
+from collections.abc import Iterable
+from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict
 

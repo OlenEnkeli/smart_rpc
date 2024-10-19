@@ -1,8 +1,10 @@
+import logging
 from datetime import UTC, datetime
 from functools import wraps
 from typing import Any
 
 from rich import print
+from rich.logging import RichHandler
 
 from smart_rpc.types import SyncFunction
 
@@ -21,11 +23,12 @@ def time_it(
         result = function(*args, **kwargs)
         finished_at = datetime.now(tz=UTC)
 
-        duration = finished_at - started_at
+        raw_duration = finished_at - started_at
+        duration = float(raw_duration.seconds + raw_duration.microseconds / 1000)
 
         print(
-            f'[turquoise4][TIME][/turquoise4] Function [bold]{function.__name__}[/bold] finished at '
-            f'[medium_spring_green][bold]{duration.seconds}:{duration.microseconds}[/medium_spring_green][/bold]',
+            f'[ocean_blue4][TIME][/ocean_blue4] Function [turquoise4][bold]{function.__name__}[/bold][/turquoise4]'
+            f'finished at [medium_spring_green][bold]{duration}[/medium_spring_green]sec[/bold]',
         )
 
         return result
@@ -48,15 +51,16 @@ def compute_average_time(
 
         finished_at = datetime.now(tz=UTC)
 
-        duration = finished_at - started_at
-        average_duration = duration / AVERAGE_TEST_COUNT
+        raw_duration = finished_at - started_at
+        duration = float(raw_duration.seconds + raw_duration.microseconds / 1000)
+
+        raw_average_duration = raw_duration / AVERAGE_TEST_COUNT
+        average_duration = float(raw_average_duration.seconds + raw_average_duration.microseconds / 1000)
 
         print(
-            f'[turquoise4][TIME][/turquoise4] Function [bold]{function.__name__}[/bold]:\n'
-            f' - Average \t [medium_spring_green][bold]{average_duration.seconds}:'
-            f'{average_duration.microseconds}[/bold][/medium_spring_green]\n'
-            f' - Total \t [medium_spring_green][bold]{duration.seconds}:'
-            f'{duration.microseconds}[/bold][/medium_spring_green]\n',
+            f'[steel_blue1][TIME][/steel_blue1] Function [turquoise4][bold]{function.__name__}[/bold][/turquoise4]:\n'
+            f' - Average \t [medium_spring_green][bold]{average_duration}[/bold] sec[/medium_spring_green]\n'
+            f' - Total \t [medium_spring_green][bold]{duration}[/bold] sec[/medium_spring_green]\n',
         )
 
         return result
@@ -70,3 +74,18 @@ def get_class_methods(cls: object) -> list[str]:
         if callable(getattr(cls, attribute))
         and attribute.startswith('_') is False
     ]
+
+
+def setup_rich_logging() -> None:
+    logging.basicConfig(
+        level='DEBUG',
+        datefmt='[%X]',
+        format='%(message)s',
+        handlers=[
+            RichHandler(
+                omit_repeated_times=False,
+                show_level=True,
+                rich_tracebacks=True,
+            ),
+        ],
+    )

@@ -1,20 +1,26 @@
 import asyncio
 import logging
-
-from typing import Type, Any
+from typing import Any
 
 from smart_rpc.constants import MESSAGE_SEPARATOR
-from smart_rpc.errors import BaseError, handle_error, ServerFatalError, ExternalError, MaxMessageSizeReceivedError
-from smart_rpc.examples import ExampleResponse, ExampleRequest
+from smart_rpc.errors import (
+    BaseError,
+    ExternalError,
+    MaxMessageSizeReceivedError,
+    ServerFatalError,
+    handle_error,
+)
+from smart_rpc.examples import ExampleRequest, ExampleResponse
 from smart_rpc.ifaces import UserIface
 from smart_rpc.message_hander import MessageHandler
 from smart_rpc.messages import Response, response_from_error
 from smart_rpc.user import User
+from smart_rpc.utils import setup_rich_logging
 
 
 class Server:
     message_handler: MessageHandler
-    user_class: Type[UserIface]
+    user_class: type[UserIface]
 
     host: str
     port: int
@@ -34,7 +40,7 @@ class Server:
         port: int,
         message_handler: MessageHandler,
         *,
-        user_class: Type[UserIface] = User,
+        user_class: type[UserIface] = User,
         connection_limit: int = 2 ** 10,  # 1024
         chunk_size: int = 2**15,  # 32 KB
         max_message_size: int = 2**20,  # 1 MB
@@ -54,6 +60,9 @@ class Server:
 
         self.users = {}
         self.logger = logging.getLogger(self.__class__.__name__)
+
+        if self.log_messages:
+            self.logger.warning('Parameter log_messages is True. Use it only for debugging purposes!')
 
     def _handle_error(self, error: BaseError) -> None:
         return handle_error(
@@ -101,7 +110,7 @@ class Server:
     async def _send_error(self, user: User, error: ExternalError) -> None:
         return await self._send_response(
             user=user,
-            response=response_from_error(error)
+            response=response_from_error(error),
         )
 
     async def _process_connection(
@@ -115,7 +124,9 @@ class Server:
             user=user,
         )
 
-        print(response)
+        if self.log_messages:
+            self.logger.debug(f'{user.address}: {response}')
+            self.logger.debug(response.payload)
 
         await self._send_response(
             user=user,
@@ -143,7 +154,6 @@ class Server:
                 asyncio.IncompleteReadError,
             ):
                 await self._user_disconnected(user)
-                break
 
             except asyncio.LimitOverrunError:
                 self.logger.debug(f'User {user.address} reach max message size')
@@ -154,11 +164,13 @@ class Server:
                     ),
                 )
                 await self._user_disconnected(user)
+
+            else:
                 break
 
     async def _connect(self) -> None:
         self.logger.info(f'Starting server on {self.host}:{self.port}')
-        self.logger.info(f'Methods: {list(self.message_handler.methods.keys())}')
+        self.logger.info(f'Available methods: {list(self.message_handler.methods.keys())}')
 
         self.server = await asyncio.start_server(
             client_connected_cb=self._handle_connection,
@@ -181,49 +193,33 @@ class Server:
             KeyboardInterrupt,
             ServerFatalError,
             asyncio.CancelledError,
-        ) as error:
-            self.logger.error(error)
+        ):
+            self.logger.exception('Fatal error')
             self.logger.info('Exiting')
 
 
 if __name__ == '__main__':
-    from rich.logging import RichHandler
-    from rich import print
-
-    logging.basicConfig(
-        level="DEBUG",
-        datefmt="[%X]",
-        format="%(message)s",
-        handlers=[
-            RichHandler(
-                omit_repeated_times=False,
-                show_level=True,
-                rich_tracebacks=True,
-            ),
-        ],
-    )
+    setup_rich_logging()
 
     handler = MessageHandler()
 
-    @handler.method("first_method")
+    @handler.method('first_method')  # type:ignore[arg-type]
     async def first_method(
         request: ExampleRequest,
         user: User,
     ) -> ExampleResponse:
-        response = ExampleResponse(
+        return ExampleResponse(
             method_name=request.method_name,
             success=True,
             trace_id=request.trace_id,
             payload={
-                "some_param": "json",
+                'some_param': user.address,
                 **request.payload.model_dump(),
             },
             headers={
                 'trace_id': request.trace_id,
             },
         )
-
-        return response
 
     srv = Server(
         host='127.0.0.1',

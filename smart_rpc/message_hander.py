@@ -1,10 +1,5 @@
-from functools import wraps
-from typing import (
-    Awaitable,
-    Callable,
-    Self,
-    TypeAlias,
-)
+from collections.abc import Awaitable, Callable
+from typing import Self
 
 from smart_rpc.errors import (
     MethodInternalError,
@@ -18,7 +13,7 @@ from smart_rpc.messages import (
     response_from_error,
 )
 
-HandlerMethod: TypeAlias = Callable[[Request, UserIface], Awaitable[Response]]
+type HandlerMethod = Callable[[Request, UserIface], Awaitable[Response]]
 
 
 class MessageHandler:
@@ -43,25 +38,15 @@ class MessageHandler:
     def method(
         self,
         method_name: str,
-    ) -> HandlerMethod:
+    ) -> Callable[[HandlerMethod], HandlerMethod]:
         def decorator(func: HandlerMethod) -> HandlerMethod:
             self.add_method(
                 method_name=method_name,
                 func=func,
             )
 
-            @wraps(func)
-            async def wrapper(
-                request: Request,
-                user: UserIface,
-            ) -> Response:
-                return await func(
-                    request,
-                    user,
-                )
-
-            return wrapper
-        return decorator # type:ignore[return-value]
+            return func
+        return decorator
 
     async def handle(
         self,
@@ -81,8 +66,8 @@ class MessageHandler:
         if not request_class:
             return response_from_error(
                 MethodInternalError(
-                    details={'request_argument': 'must be set in message handler method'}
-                )
+                    details={'request_argument': 'must be set in message handler method'},
+                ),
             )
 
         try:
